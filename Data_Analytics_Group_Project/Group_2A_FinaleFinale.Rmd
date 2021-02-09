@@ -1,0 +1,980 @@
+---
+title: "Exploring the relationship between stock prices, macroeconomic variables and gold"
+authors: "Group 2A"
+output: html_notebook
+---
+
+# How we worked as a team
+
+We did almost all of the work together with display sharing. Kerstin had a special part and cleaned most of our data for us beforehand. One team member at the time worked on the Notebook while others watched. Everybody provided code snippets, plots, help and solution for the various problems in code we were facing (and there were a lot!). Most of this happened in real time while someone was working on the notebook.
+We also worked together on both the first and second powerpoint together with "Google Slides". 
+
+We also added a lot of details after our final presentaion based on feedback (as well as more code at the end for predictions).
+
+
+
+###Loading all the necessary packages. 
+```{r}
+if (!require("plyr")) install.packages("plyr")
+if (!require("corrplot")) install.packages("corrplot")
+if (!require("ggplot2")) install.packages("ggplot2")
+if (!require("gridExtra")) install.packages("gridExtra")
+if (!require("ggthemes")) install.packages("ggthemes")
+if (!require("caret")) install.packages("caret")
+#if (!require("MASS")) install.packages("MASS")
+#if (!require("randomForest")) install.packages("randomForest")
+if (!require("rpart")) install.packages("rpart")
+if (!require("rpart.plot")) install.packages("rpart.plot")
+if (!require("labeling")) install.packages("labeling")
+if (!require("dbscan")) install.packages("dbscan")
+if(!require("forecast")) install.packages("forecast")
+
+library(plyr)
+library(corrplot)
+library(ggplot2)
+library(gridExtra)
+library(ggthemes)
+library(caret)
+#library(MASS)
+#library(randomForest)
+library(rpart)
+library(rpart.plot)
+library(labeling)
+library(dbscan)
+library(forecast)
+
+```
+
+# Data1
+
+As a first step we combined the data we have gathered from various sources to one document and uploaded it to make it arrivable to download for everyone. 
+```{r}
+data1 <- read.csv(url("https://cdn.discordapp.com/attachments/693802417745166381/700039233603371089/data_set_combined_final.csv"), sep = ";", header = TRUE)
+
+```
+
+Deleting empty rows
+```{r}
+data1 <- data1[-c(1,2,60:106),]
+```
+
+
+```{r}
+head(data1)
+summary(data1)
+```
+
+Because the variable "DJ Change" still contains the percentage sign the data type is not numeric. Therefore we simply remove the "%" to make the variable usable. 
+```{r}
+data1$DJ...Change = as.numeric(gsub("[\\%,]", "", data1$DJ...Change)) 
+
+
+data1$Annual.Change.DJ = as.numeric(gsub("[\\%,]", "", data1$Annual.Change.DJ))
+data1$Annual.Change.DJ <- as.numeric(as.character(data1$Annual.Change.DJ)) / 100
+```
+
+
+Also, we rename the colums to get rid of the dots and make easier to understand. 
+```{r}
+colnames(data1) <- c("Year", "DJ Annual", "DJ Change","Annual Change DJ", "GDP per Capita US", "Annual Growth Rate", "Annual Change Growth Rate", "Inflation Rate", "Annual Change Inflation", "Unemployment Rate", "Annual Change of Unemployment")
+```
+
+```{r}
+head(data1)
+summary(data1)
+```
+
+```{r}
+str(data1)
+```
+
+
+Year ... Year
+DJ Annual ... Value of the Dow Jones index on 31.12.XX [$]
+DJ Change ... Change of Dow Jones in comparision to the year before
+Annual Change DJ ... Change of the dow jones change
+GDP per Capital US ... gross domestic product of the USA [$]
+Annual Growth Rate ... Change of the GDP per year 
+Annual Change Growth Rate ... Change of the gdp per year change
+Inflation Rate ... The rate of the inflation []
+Annual Change Inflation ... Change of the inflation per year 
+Unemployment Rate ... The percentage of unemployed people in the USA
+Annual Change of Unemployment ... Change of the unemployment rate per year
+
+
+Create categorical variables for analysis
+```{r}
+
+data1$`DJ_Change_factor` <- factor(with(data1, ifelse((data1$`DJ Change` > 0), 1, 0)),labels = c("neg", "pos"))
+`Annual_DJ_Change_factor` <- with(data1, ifelse((data1$`Annual Change DJ` > 0), 1, 0)) 
+`Annual_Change_Growth_Rate_factor` <- with(data1, ifelse((data1$`Annual Change Growth Rate` > 0), 1, 0))
+`Annual_Change_Inflation_factor` <- with(data1, ifelse((data1$`Annual Change Inflation` > 0), 1, 0))
+`Annual_Change_of_Unemployment_factor` <- with(data1, ifelse((data1$`Annual Change of Unemployment` > 0), 1, 0))
+```
+
+
+```{r}
+str(data1)
+```
+
+
+
+```{r}
+m <- cor(data1[, c(2,5,8,10)])
+m
+corrplot(m, type="upper", order="hclust", tl.col="black", tl.srt=45)
+title("Correlation of the Variables", adj = 0.001, line = -0.1)
+```
+
+
+## Correlation of Changes
+
+```{r}
+cor(data1[, c(4,7,9,11)])
+
+```
+
+
+
+## Simple linear regression
+
+### Fitting the model
+
+We fitted a simple linear regression `DJ Annual ~GDP per Capita US` using OLS using the `lm()` function:
+
+```{r}
+fitGrowth <- lm(`DJ Annual` ~ `GDP per Capita US`, data = data1)
+```
+
+The fitted coefficients are: 
+```{r}
+fitGrowth
+```
+
+We plotted the fitted regression line:
+```{r}
+plot(`DJ Annual` ~`GDP per Capita US`, data = data1,
+     ylab = "Dow Jones Annual", xlab = "GDP per Capita in USA",
+     main = "Dow Jones in relation to GDP")
+abline(fitGrowth, col = "red", lwd = 2)
+```
+
+we can see the positive correlation between the Dow Jones index and the GDP per capita. 
+
+
+
+Using the Dow Jones Change per year as the dependent variable and the Annual gdp growth rate as independent variable for the regression line.
+model: `DJ Changes ~  Change Growth Rate`
+
+```{r}
+fitGr <- lm(data1$`DJ Change` ~ data1$`Annual Growth Rate`, data = data1)
+```
+
+The fitted coefficients are: 
+```{r}
+fitGr
+```
+
+We can plot the fitted regression line:
+```{r}
+plot(data1$`DJ Change` ~ data1$`Annual Growth Rate`, data = data1,
+     ylab = "Dow Jones Annual Change", xlab = "Change of GDP per Capita in USA",
+     main = "Dow Jones Change in relation to GDP Change per Year")
+abline(fitGr, col = "red", lwd = 2)
+```
+
+We obtain a slight negative correlation between the dow jones changes per year and the gdp change per year.
+This is suprisingly, whereas the dow jones and the gdp per capita are positively correlated the changes of dow jones and gdp are lightly negative correlated.
+
+
+We repeated the same for the other independent variables inflation rate and unemployment rate per year:
+
+```{r}
+fitInf <- lm(`DJ Change` ~ `Inflation Rate`, data = data1)
+```
+
+
+```{r}
+fitInf
+```
+
+
+
+We can plot the fitted regression line:
+```{r}
+
+plot(`DJ Change` ~ `Inflation Rate`, data = data1,
+     ylab = "Dow Jones changes", xlab = "Inflation Rate", main = "Inflation Rate in relation to Dow Jones Change")
+abline(fitInf, col = "red", lwd = 2)
+```
+
+
+
+Unemployment rate:
+
+```{r}
+fitUn <- lm(data1$`DJ Change` ~ data1$`Unemployment Rate`, data = data1)
+```
+
+
+```{r}
+fitUn
+```
+
+
+We can plot the fitted regression line:
+```{r}
+plot(`DJ Change` ~ `Unemployment Rate`, data = data1,
+     ylab = "Dow Jones Change", xlab = "Unemployment Rate",main = "Dow Jones Change in relation to the Unemployment Rate")
+abline(fitUn, col = "red", lwd = 2)
+```
+
+Can we visualize positice Dow Jones changes when annual growth rate is high and unemployment rate is low?
+Are their negative Dow Jones changes when annual growth rate is low and the unemployment rate is high?
+
+```{r}
+
+plot(`Annual Growth Rate` ~ `Unemployment Rate`,
+     ylab = "Annual Growth Rate", xlab = "Unemployment Rate", main = "Annual Growth Rate ~ Unemployment with Dow Jones Changes in Color",
+     col = Annual_DJ_Change_factor+1,
+     data = data1)
+legend("bottomright", title = "DJ Change", pch = 1, 
+       col = c(1, 2), 
+       legend= c("Positive", "Negative"))
+```
+
+We don't get the result we expected. Instead, we can't dedect a clear relationsship between the variables. 
+
+So lets look at the inflation rate:
+
+```{r}
+
+plot(data1$`Annual Growth Rate` ~ data1$`Inflation Rate`, 
+     ylab = "Annual Growth Rate", xlab = "Inflation Rate", main = "Annual Growth ~ Inflation with Dow Jones Changes in Color", 
+     col = Annual_DJ_Change_factor+1, 
+     data = data1)
+legend("bottomright", title = "DJ Changes", pch = 1,
+       col = c(1, 2), 
+       legend= c("Positive", "Negative"))
+```
+
+The same with Annual Growth Rate and Inflation Rate, we can't recognize a clear relationship for negative and positve dow jones changes.
+
+
+
+## Multiple Linear regression
+
+```{r}
+fitGrInUn <- lm(`DJ Change` ~ `Annual Growth Rate` + `Inflation Rate` + `Unemployment Rate`, data = data1)
+```
+
+The fitted coefficients are: 
+```{r}
+fitGrInUn
+```
+
+```{r}
+## forward-backward selection based on AIC
+fitStep <- step(fitGrInUn, direction = "both")
+```
+
+
+```{r}
+fitStep
+```
+
+
+### Goodness of fit
+
+#### $R^2$ statistic
+
+The $R^2$ statistic can be extracted by:
+```{r}
+summary(fitGr)$r.squared
+```
+
+
+```{r}
+summary(fitUn)$r.squared
+```
+
+
+```{r}
+summary(fitInf)$r.squared
+```
+
+
+####AIC
+
+```{r}
+AIC(fitGrInUn, fitStep)
+```
+
+
+The model with two independent variables fits best. 
+According to the adjusted $R^2$ we have the same decision:
+
+```{r}
+c(summary(fitGrInUn)$adj.r.squared, summary(fitStep)$adj.r.squared)
+```
+
+
+### Predictions and out of sample performance
+
+Create new data where the inflation rate increase by 1.3% and the Unemployment rate is 5.5%
+
+```{r}
+new_d <- data.frame(`DJ Change` = NA, `Inflation Rate` = 1.30, `Unemployment Rate` = 5.50)
+colnames(new_d) <- c("DJ Change", "Inflation Rate", "Unemployment Rate")
+new_d
+```
+
+#### Prediction accuracy
+
+One can compute a confidence interval in order to determine how close the predictions will be to the true regression line.
+
+```{r}
+
+predict(fitStep, newdata = new_d, interval = "confidence", level = 0.95)
+```
+
+*irreducible* error due to the random error term in the regression, referring to the deviation of $Y$ from $\hat Y$.  For this purpose we use prediction intervals which are wider and contain both the *reducible* and the *irreducible* error.
+
+```{r}
+predict(fitStep, newdata = new_d, interval = "prediction", level = 0.95)
+```
+
+
+#### Out-of-sample performance
+
+For assessing the predictive power of the model, one typically sets up an out of sample exercise in the following way. The data set is split into a training and a test sample: 
+  
+  * the model will be estimated on the training sample
+  * its performance will be evaluated on the test sample.
+
+Let us split our sample in 80% vs 20% train vs test sample. We assign the firs 46 observations (80% of 58) to the training set and the rest to the test set:  
+```{r}
+## keep last 10% of the observations for testing
+
+train_dat <- data1[1:floor(58*0.8), ]
+test_dat  <- data1[-(1:floor(58*0.8)), ]
+```
+
+Fit the three models on the training set:
+```{r}
+fitInUn <- lm(`DJ Change` ~ `Inflation Rate`+ `Unemployment Rate`, data = train_dat)
+fitall <- lm(`DJ Change` ~ `Annual Growth Rate`+`Inflation Rate`+ `Unemployment Rate`, 
+             data = train_dat)
+
+```
+
+
+In `R` we can compute the predictions of the models for the test set in the following way:
+```{r}
+## compute the prediction errors
+y_hat_InUn <- predict(fitInUn, newdata = test_dat) # predictions
+
+y_hat_all <- predict(fitall, newdata = test_dat) # predictions
+```
+
+The root mean squared errors are the given by: 
+```{r}
+## root mean squared error
+sqrt(c(mean((y_hat_InUn - test_dat$`DJ Change`)^2), 
+       mean((y_hat_all - test_dat$`DJ Change`)^2)))
+
+
+```
+
+The lowest mean squared error is achieved by the first model. In this case the in sample and out of sample performance favors same model.
+
+As a conclusion we can say the the model `DJ Change` ~ `Inflation Rate`+ `Unemployment Rate` fits the best in our linear regression.
+
+
+But is that really the best model we could find?
+Let's see what result we will get from a multiple logistic regression using the dow jones change as a categorical variable :
+
+
+## Multiple Logistic Regression
+
+
+```{r}
+## Estimating multiple logistic regression
+## using all variables
+
+fit_logit <- glm(DJ_Change_factor ~ `Annual Growth Rate`+
+                   `Unemployment Rate`+ `Inflation Rate`, 
+           data = data1, family = binomial())
+summary(fit_logit)
+```
+
+```{r}
+summary(data1)
+```
+
+
+### Model selection
+
+
+```{r}
+data1_NAomit <- na.omit(data1)
+
+fit_logit_all <- glm(DJ_Change_factor ~ .,
+                     data = data1_NAomit[, -c(1,2,3,4)], #Excluding the Dow Jones variables
+                     family = binomial())
+fit_logit_step <- step(fit_logit_all)
+```
+Print the summary of the chosen model:
+
+```{r}
+summary(fit_logit_step)
+```
+
+In contrast to the linear regression the logistic regression delivers the model `DJ_Change_factor ~ Annual Growth Rate + Unemployment Rate` as the best.
+
+## Predictions with the newly chosen model
+
+Lets assign new values to the independent variables and check the performance on prediction  
+```{r}
+x_new <- data.frame(DJ_Change_factor = c(1, 0), 
+                    `Annual Growth Rate` = c(4.00, 1.00), 
+                    `Unemployment Rate` = c(3.00, 7.00))
+
+colnames(x_new) <- c("DJ_Change_factor", "Annual Growth Rate", "Unemployment Rate")
+
+x_new
+```
+
+
+What would be the predicted probability of positive DJ Change?
+Using the `predict()` function.
+
+For getting the probability of default we need the argument type `type = "response"`:
+```{r}
+predict(fit_logit_step, newdata = x_new, type = "response")
+```
+
+
+The best model we get from the logistic regression is `DJ_Change_factor ~ Annual Growth Rate + Unemployment Rate`
+Now we have obtain two different model, but don't know whats really the best model.
+So let's take another try and use the classification tree.
+
+
+
+## Classification trees
+
+Let's built a classification tree to find a appropriate classification. 
+
+
+```{r}
+str(data1)
+```
+
+### Fitting
+
+
+The function identifies `(DJ_Change_factor)` as a categorical variables so a classification tree is built. By default, `rpart()` will use the Gini index.
+
+```{r}
+ct <- rpart(DJ_Change_factor ~ ., 
+            data = data1[, c(6, 8, 10, 12)],
+            model = TRUE)
+```
+
+To use the entropy as an impurity measure we have:
+```{r}
+ct_entropy <- rpart(factor(DJ_Change_factor) ~ ., 
+                    data = data1[, c(6, 8, 10, 12)],
+                    parms = list(split = "information"))
+```
+
+### Visualizing the tree
+```{r}
+rpart.plot(ct)
+```
+
+In the default plot for classification trees each node contains the predicted class chosen as the most common class of the observations in the node, the percentage of the second class within the node and the percentage of observations falling into the node. 
+Considering the root node: the predicted class is `positive` and the distribution of the response in this node is 30% `neg` vs. 70% `pos`. 100% of the observations are in the root node. Take the left node below. The predicted (majority) class in this node is `neg` with a distribution of 67% `neg` and 33% `pos`. 16% of the observations fall into this node.
+
+
+
+### Tuning the parameters
+
+#### Pruning
+
+
+The `rpart()` function also delivers more information on which would be the optimal `cp` to choose for this data set. It performs a cross-validation exercise and the results can be obtained by:
+```{r}
+printcp(ct)
+```
+
+A graph which shows us how the relative error computed through cross-validation changes for the different values of `cp`:
+```{r}
+plotcp(ct)
+```
+
+
+Prune the tree for  `cp = 0.11`:
+```{r}
+ct_pruned <- prune(ct, cp = 0.12)
+```
+
+```{r}
+rpart.plot(ct_pruned)
+```
+The model seems to be pruned to much. So the tree which is not pruned seems like a better choice. 
+
+
+#### Summary
+The summary of an `rpart` object returns a long output containing information regarding the fitted tree.
+```{r}
+summary(ct)
+```
+
+The Classification tree delivers the `Annual Growth Rate` and `Unemployment Rate` as best splitting attributes to assign a class of the DJ_Change_factor to unseen data.
+
+As a conclusion, after running a linear regression we wanted to proof our findings and run a logistic regression and a classification tree. We got two possible models in the end.
+
+
+
+# Data 2
+
+```{r}
+
+data2 <- read.csv(url("https://cdn.discordapp.com/attachments/693802417745166381/699890655765332069/daily_DJ_Gold.csv"), sep = ";", header = TRUE)
+```
+
+```{r}
+head(data2)
+summary(data2)
+```
+
+Changing the naming scheme of the columns
+
+```{r}
+colnames(data2) <- c("Date", "DJ", "DJ.Change", "Gold", "Gold.Change")
+```
+
+Extracting Date of dataset 2 and adding it into the dataset.
+```{r}
+data2$Date <- as.Date(gsub("\\.", "\\/", data2$Date),format = '%d/%m/%Y')
+
+```
+
+```{r}
+head(data2)
+```
+
+
+```{r}
+summary(data2)
+```
+
+```{r}
+str(data2)
+```
+
+
+###Visualization of Dow Jones Prices over the Years
+```{r}
+ggplot(data2, aes(x= Date,y = DJ)) + geom_line(color = "darkblue") + ggtitle("Dow Jones prices") + xlab("Date") + ylab("Price") + theme(plot.title = element_text(hjust = 0.5)) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) +  scale_x_date(date_labels = "%m %Y", date_breaks = "6 months")
+```
+
+###Visualization of Gold Prices over the Years
+```{r}
+ggplot(data2, aes(x= Date,y = Gold)) + geom_line(color = "red") + ggtitle("Gold prices") + xlab("Date") + ylab("Price") + theme(plot.title = element_text(hjust = 0.5)) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) +  scale_x_date(date_labels = "%m %Y", date_breaks = "6 months")
+```
+
+###Visualization of both prices scaled over the Years
+```{r}
+scaled_dj <- scale(data2$DJ)
+scaled_gold <- scale(data2$Gold)
+
+
+ggplot(data2, aes(x = Date)) +
+  geom_line(aes(y = scaled_dj, color = "Dow Jones")) + ggtitle("Gold/Dow Jones Prices - scaled") +
+  geom_line(aes(y = scaled_gold, color = "Gold")) + xlab("Date") + ylab("Scaled price") +
+  theme(plot.title = element_text(hjust = 0.5), panel.border = element_blank()) +
+  scale_x_date(date_labels = "%m %Y", date_breaks = "6 months") + theme(axis.text.x = element_text(angle = 90, hjust =1))+ scale_colour_manual("Index", values=c("Dow Jones"="darkblue", "Gold"="firebrick4"))
+```
+
+###A better visualization  
+```{r}
+p <- ggplot(data2, aes(x = Date))
+  p <- p + geom_line(aes(y = scaled_dj, colour = "Dow Jones"))
+
+  # adding the relative humidity data, transformed to match roughly the range of the temperature
+  p <- p + geom_line(aes(y = scaled_gold, colour = "Gold"))
+
+  p <- p + scale_y_continuous(sec.axis =   sec_axis(~.*sd(data2$Gold)+mean(data2$Gold), name = "Gold price in $/unze"))
+
+  # modifying colours and theme options
+  p <- p + scale_colour_manual(values = c("blue", "red"))
+  p <- p + labs(y = "Dow Jones price in $",
+                x = "Year",
+                colour = "Index")
+  p <- p + theme(legend.position = c(0.7, 0.9))
+p
+```
+
+
+```{r}
+## plot(x, y)
+plot(data2$DJ, data2$Gold, 
+     ylab = "Gold", xlab = "Dow Jones", main = "Simple Dow Jones and Gold plotted")
+```
+
+```{r}
+## plot(x, y)
+plot(data2$DJ.Change, data2$Gold.Change, 
+     ylab = "Gold", xlab = "Dow Jones", main = "Simple Change of DJ and Gold plotted")
+```
+
+We use this later on for plotting with factors.
+```{r}
+data2$`DJ.Change_factor` <- with(data2, ifelse((data2$`DJ.Change` > 0), 1, 0))
+data2$`Gold.Change_factor` <- with(data2, ifelse((data2$`Gold.Change` > 0), 1, 0))
+```
+0 is a negative change and 1 a positive.
+
+```{r}
+plot(DJ.Change ~ Gold.Change, 
+     col = c(1,2), 
+     data = data2)
+legend("bottomleft", title = "Gold Change", pch = 1, 
+       col = c(1, 2), 
+       legend= c("Positive", "Negative"))
+```
+
+
+## Correlation Data 2
+stock of Dow Jones and stock of Gold
+```{r}
+cor(data2[, c(2,4)])
+```
+
+## Correlation Data 2
+
+changes of Dow Jones and Gold
+```{r}
+cor(data2[, c(3,5)])
+```
+
+
+## Simple linear regression Data 2
+
+### Fitting the model Data 2
+
+We fit a simple linear regression Dow Jones ~ Gold using OLS using the lm() function:
+```{r}
+fitGold <- lm(DJ ~ Gold, data = data2)
+```
+
+The fitted coefficients are: 
+```{r}
+fitGold
+```
+```{r}
+plot(fitGold)
+```
+
+The fitted regression line is:
+$$
+\widehat{Dow Jones} = 7995.195 + 6.173 \cdot Gold
+$$
+
+Interpretation of the coefficients: 
+
+  * $\beta_0 = 799.195$, the intercept, is the average value of Dow Jones when Gold is equal to 0.
+  * $\beta_1 = 6.173$, the slope, is the marginal effect of Gold on Dow Jones. The expected value for Dow Jones will increase by
+$\beta_1 =  6.173 \times 100\approx  617.3$ units for every additional 100 dollars increase on gold price.
+
+We can plot the fitted regression line:
+{r}
+plot(data2$DJ ~ data2$Gold, data = data2)
+abline(fitGold, col = "red", lwd = 2)
+
+### K-means Clustering (data 2)
+
+Choosing the first centroids and defining the number of clusters in our model. 
+```{r}
+# Manually select number of initial values 
+nstart <- 5
+# Manually select optimal number of clusters 
+clusters <- 4
+# k-means Clustering
+model.pc <- kmeans(data2[, c(2,4)], 
+                   centers = clusters, 
+                   nstart = nstart)
+```
+
+
+We can extract the centroids (the average value of the x and y variables in each cluster) by:
+```{r}
+model.pc$centers
+```
+
+
+Using the clustering to color code the points in the scatterplot:
+```{r}
+plot(data2[, c(2,4)], col = model.pc$cluster)
+points(model.pc$centers, pch = 3, cex = 2)
+text(model.pc$centers, labels = 1:4, pos = 2)
+```
+
+K-Means Clustering obviously didn't fit so we tried using dbscan.
+
+##DB scan of the dataset 2
+```{r}
+### DBSCAN - minPts = roughly dimension+1
+model.dbs <- dbscan::dbscan(data2[, c(2,4)], 
+                            eps = 100, 
+                            minPts = 3)
+plot(data2[, c(2,4)], col = model.dbs$cluster + 1,
+     main = "DB Scan of the Gold and DOW J. Data (First Estimate)")
+```
+
+```{r}
+model.dbs
+```
+
+Now we choose a better Eps.
+
+```{r}
+kNNdistplot(data2[, c(2,4)], k = 3) 
+abline(h = 120, lty = 2)
+```
+
+```{r}
+model.dbs <- dbscan::dbscan(data2[, c(2,4)], 
+                            eps = 120, 
+                            minPts = 3)
+plot(data2[, c(2,4)], col = model.dbs$cluster + 1, 
+     main = "DB Scan after correcting the model")
+model.dbs
+```
+
+
+
+
+### Add weekdays to data set (2)
+```{r}
+Sys.setlocale("LC_TIME", "en_US")
+Sys.setlocale("LC_TIME", "English")
+data2$day <- weekdays(data2$Date, abbreviate = FALSE)
+
+data2$day <- ordered(data2$day, levels=c("Monday", "Tuesday", "Wednesday", "Thursday", 
+"Friday"))
+```
+
+```{r}
+str(data2)
+```
+
+```{r}
+plot(DJ.Change ~ day, data = data2, xlab = "Day")
+```
+
+```{r}
+plot(DJ.Change ~ day, data = data2, xlab = "Day")
+```
+
+### Add months to data set (2)
+```{r}
+data2$month <-months(data2$Date, abbreviate = FALSE)
+data2$month <- as.factor(data2$month)
+
+data2$month <- ordered(data2$month, levels=c("January", "February", "March", "April","May", "June", "July", "August", "September","October","November", "December"))
+```
+
+```{r}
+plot(DJ.Change ~ month, data = data2, las = 2, xlab = "Month")
+```
+
+### Add years to data set (2)
+
+```{r}
+plot(DJ.Change ~ as.Date(data2$Date, "%Y"), data = data2, xlab = "Year")
+```
+
+We initially had problems with missing values these are the remenant tries. 
+```{r}
+#install.packages("naniar")
+#library(naniar)
+#data2$Gold.Change.. %>%
+#  replace_with_na(replace = list(x > 15))
+```
+
+
+```{r}
+#list_na <- colnames(data2)[ apply(data2, 2, anyNA) ]
+#list_na
+#average_missing <- apply(data2[,colnames(data2) %in% list_na],
+#                         2,
+#                         mean,
+#                         na.rm =  TRUE)
+#average_missing
+#data2_replace <- data2 %>%
+#  mutate(replace_mean_GOLD  = ifelse(is.na(Gold), average_missing[1], Gold),
+#         replace_mean_GOLD2 = ifelse(is.na(Gold.Change..), average_missing[2], Gold.Change..))
+#
+
+```
+
+## Add weekdays to data set (2)
+```{r}
+data2$day <-weekdays(data2$Date, abbreviate = FALSE)
+```
+```{r}
+str(data2)
+```
+
+```{r}
+data2$day <- as.factor(data2$day)
+data2$day <- ordered(data2$day, levels=c("Monday", "Tuesday", "Wednesday", "Thursday", 
+"Friday"))
+```
+```{r}
+str(data2)
+```
+```{r}
+plot(DJ.Change ~ day, data = data2, xlab = "Day", main = "Dow Jones Change per Day")
+plot(Gold.Change ~ day, data = data2, xlab = "Day", main = "Gold Change per Day")
+```
+
+```{r}
+plot(factor(data2$Gold.Change_factor) ~ data2$day, data = data2, xlab = "Day", ylab = "Gold Change Factor", main = "Gold Change per Day (factor)")
+plot(factor(data2$DJ.Change_factor) ~ data2$day, data = data2,xlab = "Day",ylab = "DJ.Change Factor", main = "Dow Jones Change per Day (factor)")
+```
+We can see that there is no significant difference in changes of DJ and Gold. 
+
+
+## Add months to data set (2)
+```{r}
+data2$month <-months(data2$Date, abbreviate = FALSE)
+data2$month <- as.factor(data2$month)
+data2$month <- ordered(data2$month, levels=c("January", "February", "March", "April","May", "June", "July", "August", "September","October","November", "December"))
+
+
+```
+
+```{r}
+plot(DJ.Change ~ month, data = data2, las = 2, xlab = "Month",main = "Dow Jones Change per Month")
+```
+
+```{r}
+plot(factor(data2$DJ.Change_factor) ~ month, data = data2, las = 2,
+     ylab = "Dow Jones Factor of Change", xlab = "Months") #Turning the names of the months like above with las2 did not work for this plot. 
+```
+
+
+```{r}
+plot(factor(data2$Gold.Change_factor) ~ month, data = data2, las = 2,
+     ylab = "Gold Factor of Change", xlab = "Months", main = "Factor of Gold Change each month")
+```
+## Add years to data set (2)
+
+```{r}
+data2$year <- format(as.Date(data2$Date, format="%d/%m/%Y"),"%Y")
+```
+
+```{r}
+plot(DJ.Change ~ year, data = data2, xlab = "Year", main = "Dow Jones Change")
+```
+
+```{r}
+plot(Gold.Change ~ year, data = data2,
+     ylab = "Change in Gold Price", xlab = "Year", main = "Change in Gold Price per Year")
+```
+
+
+## Time Series 
+
+Two vectors are created using our second data set - one for Dow Jones and one for Gold.
+
+```{r}
+vectorDJ <- data2[,2]
+vectorGold <- data2[, 4]
+```
+
+With that we can simply define and plot a time series. For both, DJ and Gold, we use the daily data from 2018 till today. Unfortunately as data is missing in 2017 we can only start in the year 2018.
+
+##Plotting daily data of Gold and Dow Jones
+```{r}
+# time series - frequence = 365 means daily 
+tsDJ <- ts(vectorDJ, start=c(2018, 01, 01), end=c(2020, 02, 28), frequency=365) 
+tsGold <- ts(vectorGold, start=c(2018, 01, 01), end=c(2020, 02, 28), frequency=365) 
+
+# plot series
+plot(tsDJ)
+plot(tsGold)
+```
+
+To inspect the time series the "stl" function is used. This allows us to see the seasonal components, as well as a trend and a remainder. These might be useful for a prediction. 
+```{r}
+fitDJ <- stl(tsDJ, s.window="period")
+fitGold <- stl(tsGold, s.window="period")
+plot(fitDJ, main ="Dow Jones")
+plot(fitGold, main ="Gold")
+```
+
+Monthplot is not well usable as there's too much data because we use a daily frequency.
+```{r}
+#monthplot(tsDJ)
+```
+
+Here is an attempt of plotting seasonplots. However, they are not that usefull to our research. 
+For that we need the forecast package. 
+
+##Looking at seasonal data from Dow Jones and Gold
+```{r}
+seasonplot(tsDJ, main = " Seasonplot for Dow Jones")
+```
+
+```{r}
+seasonplot(tsGold, main = "Seasonplot for Gold")
+```
+
+
+## Predict future values
+
+### First attempt 
+
+Here is our attempt at predicting the future values for our dataset 2. 
+
+First, we could use the naive predicting method which would simply be the last value of the data. However, this method is unsufficient. 
+
+```{r}
+alpha <- HoltWinters(tsDJ, beta=FALSE, gamma=FALSE) 
+alpha
+plot(forecast(alpha, 100), type = "l")
+accuracy(forecast(alpha, 100))
+```
+
+### Second attempt - using 3rd exponential smoothing
+
+Therefore, the 3rd exponential smoothing is used to deal with seasonality and trends as well. 
+
+```{r}
+# triple exponential 
+fitHWDJ <- HoltWinters(tsDJ)
+fitHWGold <- HoltWinters(tsGold)
+
+# predictive accuracy
+accuracy(forecast(fitHWDJ))
+accuracy(forecast(fitHWGold))
+```
+
+```{r}
+plot(forecast(fitHWDJ, 100), type = "l", main = "Dow Jones Prediction")
+```
+
+```{r}
+plot(forecast(fitHWGold, 100), type = "l", main = "Gold Prediction")
+```
+
+Here we get some decent predictions for our dataset. However, these predictions are simply made from the values of our data. That means they don't take external factors into account which makes them better than a random guess but I wouldn't invest all my money using this prediction. 
+
+
+
+
