@@ -1,0 +1,6 @@
+mapply==0.1.7
+yfinance==0.1.59
+praw==7.2.0
+dask==2021.4.1
+simfin==0.8.1
+wordcloud
